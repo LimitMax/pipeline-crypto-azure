@@ -1,0 +1,18 @@
+# Ignore Python cache & venv
+__pycache__/
+.venv/
+.vscode/
+
+# Ignore local config
+local.settings.json
+.env
+
+# Ignore data files (backfill CSV, raw dumps)
+data/
+*.csv
+
+# Ignore git & docs
+.git/
+.gitignore
+LICENSE
+README.md

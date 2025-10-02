@@ -1,0 +1,8 @@
+azure-functions
+yfinance
+pandas
+pyodbc
+azure-storage-blob
+python-dotenv
+pyarrow
+
