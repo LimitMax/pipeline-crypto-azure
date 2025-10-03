@@ -1,22 +1,9 @@
-# Azure Functions
 azure-functions
-
-# Azure Storage Blob
 azure-storage-blob
-
-# Database (SQL Server)
 pyodbc
-
-# Data processing
 pandas
 pyarrow
 numpy
-
-# Data source (Crypto)
 yfinance
-
-# HTTP Requests (News API)
 requests
-
-# Environment management
 python-dotenv
