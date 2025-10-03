@@ -1,17 +1,23 @@
-import os, datetime, logging
-import azure.functions as func
-from zoneinfo import ZoneInfo
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging, sys, traceback
 
-# import utils
-from utils.data_fetcher import fetch_data
-from utils.blob_handler import connect_blob, save_raw_to_blob
-from utils.db_handler import (
-    connect_sql, insert_incremental, log_ingestion, log_data_quality_issue,
-    get_last_success, update_last_success
-)
+try:
+    # semua import utama
+    import os, datetime
+    import azure.functions as func
+    from zoneinfo import ZoneInfo
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from utils.data_fetcher import fetch_data
+    from utils.blob_handler import connect_blob, save_raw_to_blob
+    from utils.db_handler import (
+        connect_sql, insert_incremental, log_ingestion, log_data_quality_issue,
+        get_last_success, update_last_success
+    )
+    from dotenv import load_dotenv
+except Exception as e:
+    logging.error("🔥 Import error in TimerCryptoIngest!", exc_info=True)
+    raise
 
-from dotenv import load_dotenv
+
 load_dotenv()
 
 # symbols crypto
