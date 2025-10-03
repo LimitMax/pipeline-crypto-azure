@@ -1,37 +1,27 @@
-import datetime, requests, pandas as pd
+import os, datetime, logging
 import azure.functions as func
+import requests, pandas as pd
+from utils.db_handler import connect_sql, insert_news
+from dotenv import load_dotenv
 
-from utils import config
-from utils.logger import logger
-from utils.db_handler import insert_news, sql_cursor, log_ingestion
-from utils.etl_logger import log_summary
-from utils.retry import with_retry
+load_dotenv()
+API_KEY = os.getenv("NEWSAPI_KEY")
+logging.basicConfig(level=logging.INFO)
 
+def log_header(title: str):
+    logging.info("="*80)
+    logging.info(title)
+    logging.info("="*80)
 
-def fetch_crypto_news(query="crypto OR bitcoin OR ethereum"):
-    """Ambil berita crypto dari NewsAPI"""
+def fetch_crypto_news(query="crypto OR bitcoin", from_days=1, page_size=10):
     url = "https://newsapi.org/v2/everything"
-    from_date = (datetime.datetime.utcnow() - datetime.timedelta(days=config.NEWSAPI_DAYS)).strftime("%Y-%m-%d")
+    from_date = (datetime.datetime.utcnow() - datetime.timedelta(days=from_days)).strftime("%Y-%m-%d")
 
-    params = {
-        "q": query,
-        "from": from_date,
-        "language": "en",
-        "sortBy": "publishedAt",
-        "pageSize": config.NEWSAPI_PAGESIZE,
-        "apiKey": config.NEWSAPI_KEY
-    }
-
-    def _call_api():
-        r = requests.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        if "articles" not in data:
-            raise ValueError(f"NewsAPI error: {data}")
-        return data
-
-    # Retry API call
-    data = with_retry(_call_api, max_attempts=3)
+    params = {"q": query, "from": from_date, "language": "en", "pageSize": page_size, "apiKey": API_KEY}
+    r = requests.get(url, params=params)
+    data = r.json()
+    if r.status_code != 200 or "articles" not in data:
+        raise Exception(f"NewsAPI error: {data}")
 
     return pd.DataFrame([{
         "title": a["title"],
@@ -42,57 +32,25 @@ def fetch_crypto_news(query="crypto OR bitcoin OR ethereum"):
         "url": a["url"]
     } for a in data["articles"]])
 
-
-def process_news(query="crypto OR bitcoin OR ethereum"):
-    """ETL untuk berita dari NewsAPI"""
-    start_time = datetime.datetime.utcnow()
-    logger.info(f"📰 Start News Fetch: query='{query}'")
-
+def process_news():
     try:
-        df_news = fetch_crypto_news(query)
+        df_news = fetch_crypto_news(from_days=1, page_size=5)
         if df_news.empty:
-            logger.warning("⚠️ No news fetched")
-            return {"source": "NewsAPI", "status": "FAILED", "rows": 0}
-
-        rows = with_retry(lambda: insert_news(df_news))
+            return {"source": "NewsAPI", "status": "SKIPPED", "rows": 0}
+        rows = insert_news(df_news)
         return {"source": "NewsAPI", "status": "SUCCESS", "rows": rows}
-
     except Exception as e:
-        logger.error(f"❌ News fetch failed: {e}")
+        logging.error(f"❌ Error fetch news: {e}", exc_info=True)
         return {"source": "NewsAPI", "status": "FAILED", "rows": 0}
 
-    finally:
-        logger.info("✅ End News Fetch\n")
-
-
 def main(timer: func.TimerRequest) -> None:
-    """Main Azure Function entrypoint"""
-    started_at = datetime.datetime.utcnow()
-    logger.info("🚀 TimerNewsIngest started")
-
-    # Tes koneksi DB sebelum jalan
     try:
-        with sql_cursor() as cur:
-            cur.execute("SELECT 1")
-    except Exception as e:
-        logger.error(f"❌ SQL connection error: {e}")
-        return
+        started_at = datetime.datetime.utcnow()
+        log_header("TimerNewsIngest started")
 
-    # Jalankan ETL News
-    results = [process_news()]
+        connect_sql().close()  # test koneksi
+        result = process_news()
+        logging.info(f"📊 Result: {result}")
 
-    finished_at = datetime.datetime.utcnow()
-    log_summary(results, started_at, finished_at, entity="News")
-
-    # Log global ke IngestionLog
-    try:
-        with sql_cursor() as cur:
-            r = results[0]
-            log_ingestion(
-                cur, "NEWSAPI", r["status"],
-                f"Rows={r['rows']}", r["rows"],
-                started_at, finished_at
-            )
-        logger.info("📝 Global summary written to IngestionLog")
-    except Exception as e:
-        logger.error(f"⚠️ Failed to log global summary: {e}")
+    except Exception as fatal:
+        logging.error(f"🔥 Fatal error in TimerNewsIngest: {fatal}", exc_info=True)
