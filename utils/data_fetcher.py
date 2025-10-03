@@ -1,11 +1,17 @@
+import time, datetime
 import yfinance as yf
 import pandas as pd
-import logging, time
-import datetime
+from utils import config
+from utils.logger import logger
 
-def fetch_data(symbol, start, end, interval="1h", adjusted=False, retries=3):
+
+def fetch_data(symbol, start, end, interval=None, adjusted=False, retries=3, tz="UTC"):
+    """Fetch OHLCV data dari yfinance untuk 1 symbol"""
+
+    interval = interval or config.INTERVAL
+
     if start >= end:
-        logging.warning(f"⚠️ Invalid range for {symbol}: start {start} >= end {end}")
+        logger.warning(f"Invalid range for {symbol}: start {start} >= end {end}")
         return pd.DataFrame()
 
     attempt, df = 0, pd.DataFrame()
@@ -21,12 +27,12 @@ def fetch_data(symbol, start, end, interval="1h", adjusted=False, retries=3):
             if not df.empty:
                 break
         except Exception as e:
-            logging.error(f"❌ Error fetching {symbol} (attempt {attempt+1}): {e}")
+            logger.error(f"Error fetching {symbol} (attempt {attempt+1}): {e}")
         attempt += 1
-        time.sleep(2 * attempt)
+        time.sleep(2 * attempt)  # exponential backoff
 
     if df.empty:
-        logging.warning(f"⚠️ No data returned for {symbol} {start} - {end} after {retries} retries")
+        logger.warning(f"No data returned for {symbol} {start} - {end} after {retries} retries")
         return pd.DataFrame()
 
     # Normalize columns
@@ -35,10 +41,20 @@ def fetch_data(symbol, start, end, interval="1h", adjusted=False, retries=3):
         df.columns = [c[0] if c[0] else c[1] for c in df.columns]
 
     ts_col = "Datetime" if "Datetime" in df.columns else "Date"
+
+    # Apply timezone if needed
+    if tz and ts_col in df.columns:
+        try:
+            df[ts_col] = df[ts_col].dt.tz_localize("UTC").dt.tz_convert(tz).dt.tz_localize(None)
+        except Exception:
+            # kalau sudah ada timezone, langsung convert
+            df[ts_col] = df[ts_col].dt.tz_convert(tz).dt.tz_localize(None)
+
     df['date'] = df[ts_col].dt.date
     df['hourx'] = df[ts_col].dt.hour
-    df['crypto'] = symbol   # ✅ konsisten dengan DB
+    df['crypto'] = symbol   # konsisten dengan DB schema
 
     curated = df[['date','hourx','crypto','Open','High','Low','Close','Volume']]
-    logging.info(f"✅ {symbol}: fetched {len(curated)} rows ({start} → {end}) in {elapsed}s")
+    logger.info(f"{symbol}: fetched {len(curated)} rows ({start} → {end}) in {elapsed}s (interval={interval}, tz={tz})")
+
     return curated

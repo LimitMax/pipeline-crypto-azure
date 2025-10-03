@@ -1,8 +1,22 @@
+# Azure Functions
 azure-functions
-yfinance
-pandas
-pyodbc
-azure-storage-blob
-python-dotenv
-pyarrow
 
+# Azure Storage Blob
+azure-storage-blob
+
+# Database (SQL Server)
+pyodbc
+
+# Data processing
+pandas
+pyarrow
+numpy
+
+# Data source (Crypto)
+yfinance
+
+# HTTP Requests (News API)
+requests
+
+# Environment management
+python-dotenv

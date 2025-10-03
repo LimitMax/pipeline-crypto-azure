@@ -1,14 +1,18 @@
+import re
+
+# Peta regex ke symbol
+COIN_MAP = {
+    r"\b(bitcoin|btc)\b": "BTC-USD",
+    r"\b(ethereum|eth)\b": "ETH-USD",
+    r"\b(solana|sol)\b": "SOL-USD",
+    r"\bxrp\b": "XRP-USD",
+    r"\bdoge|dogecoin\b": "DOGE-USD"
+}
+
 def detect_coin(text: str) -> str:
+    """Deteksi coin dari teks berita (title + content)"""
     text = str(text).lower()
-    if "bitcoin" in text or "btc" in text:
-        return "BTC-USD"
-    elif "ethereum" in text or "eth" in text:
-        return "ETH-USD"
-    elif "solana" in text or "sol" in text:
-        return "SOL-USD"
-    elif "xrp" in text:
-        return "XRP-USD"
-    elif "doge" in text:
-        return "DOGE-USD"
-    else:
-        return "ALL"
+    for pattern, coin in COIN_MAP.items():
+        if re.search(pattern, text):
+            return coin
+    return "ALL"
